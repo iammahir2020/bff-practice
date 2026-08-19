@@ -1,0 +1,7 @@
+{
+  "name": "bff-practice-lambda",
+  "private": true,
+  "dependencies": {
+    "aws4": "^1.13.2"
+  }
+}

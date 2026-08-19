@@ -1,0 +1,34 @@
+type Order @aws_iam @aws_cognito_user_pools {
+  orderId: ID!
+  status: String
+  customer: String
+}
+
+input OrderInput {
+  orderId: ID!
+  status: String
+  customer: String
+}
+
+type Mutation {
+  publishOrderUpdate(order: OrderInput!): Order
+    @aws_iam
+}
+
+type Subscription {
+  onOrderUpdate: Order
+    @aws_subscribe(mutations: ["publishOrderUpdate"])
+    @aws_cognito_user_pools
+}
+
+type Query {
+  _health: String
+    @aws_iam
+    @aws_cognito_user_pools
+}
+
+schema {
+  query: Query
+  mutation: Mutation
+  subscription: Subscription
+}

@@ -1,5 +1,5 @@
 {
-  "app": "npx tsc && npx tsx bin/bff-practice.ts",
+  "app": "npm install --prefix lambda && npx tsc && npx tsx bin/bff-practice.ts",
   "watch": {
     "include": [
       "**"
