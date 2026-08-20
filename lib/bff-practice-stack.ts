@@ -8,6 +8,7 @@ import * as appsync from 'aws-cdk-lib/aws-appsync';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import { DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
+import { MicroserviceEventSource } from './microservice-source-construct';
 
 export class BffPracticeStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -163,6 +164,9 @@ export class BffPracticeStack extends cdk.Stack {
       }),
     );
 
+    // ── Step 1 of backend_implementation_steps.md: bare event bus ────
+    const microservice = new MicroserviceEventSource(this, 'MicroserviceEventSource', { table });
+
     new cdk.CfnOutput(this, 'ApiUrl', { value: api.url });
     new cdk.CfnOutput(this, 'GraphqlUrl', { value: graph.graphqlUrl });
     new cdk.CfnOutput(this, 'UserPoolId', { value: userPool.userPoolId });
@@ -170,5 +174,6 @@ export class BffPracticeStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'DashboardUrl', {
       value: `https://${this.region}.console.aws.amazon.com/cloudwatch/home?region=${this.region}#dashboards:name=${dashboard.dashboardName}`,
     });
+    new cdk.CfnOutput(this, 'MicroserviceEventBusName', { value: microservice.eventBusName });
   }
 }
