@@ -6,6 +6,7 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as appsync from 'aws-cdk-lib/aws-appsync';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import { DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 
 export class BffPracticeStack extends cdk.Stack {
@@ -24,6 +25,7 @@ export class BffPracticeStack extends cdk.Stack {
       handler: 'handler.handler',
       code: lambda.Code.fromAsset('lambda'),
       environment: { TABLE_NAME: table.tableName },
+      tracing: lambda.Tracing.ACTIVE,
     });
     table.grantReadData(getOrdersFn);
 
@@ -53,6 +55,7 @@ export class BffPracticeStack extends cdk.Stack {
         authorizer: apiAuthorizer,
         authorizationType: apigateway.AuthorizationType.COGNITO,   // every route now requires a valid token
       },
+      deployOptions: { tracingEnabled: true },
     });
 
     const graph = new appsync.GraphqlApi(this, 'BffGraphApi', {
@@ -69,6 +72,10 @@ export class BffPracticeStack extends cdk.Stack {
           { authorizationType: appsync.AuthorizationType.IAM },
         ],
       },
+      // xrayEnabled intentionally omitted: it forces CloudFormation to replace
+      // the GraphQL API (new URL, cascading replacement of schema/data
+      // source/resolver) rather than an in-place update. Revisit deliberately
+      // if AppSync-side tracing is needed later.
     });
 
     const noneDs = graph.addNoneDataSource('NoneDS');
@@ -87,6 +94,7 @@ export class BffPracticeStack extends cdk.Stack {
       handler: 'stream.handler',
       code: lambda.Code.fromAsset('lambda'),
       environment: { APPSYNC_URL: graph.graphqlUrl },
+      tracing: lambda.Tracing.ACTIVE,
     });
     streamFn.addEventSource(new DynamoEventSource(table, {
       startingPosition: lambda.StartingPosition.LATEST,
@@ -95,9 +103,72 @@ export class BffPracticeStack extends cdk.Stack {
     }));
     graph.grantMutation(streamFn, 'publishOrderUpdate');
 
+    // ── Monitoring dashboard: one screen for system health ──────────
+    const dashboard = new cloudwatch.Dashboard(this, 'BffDashboard', {
+      dashboardName: 'BFF-Live-Health',
+    });
+
+    dashboard.addWidgets(
+      new cloudwatch.GraphWidget({
+        title: 'Lambda Invocations',
+        left: [
+          getOrdersFn.metricInvocations({ period: cdk.Duration.minutes(5) }),
+          streamFn.metricInvocations({ period: cdk.Duration.minutes(5) }),
+        ],
+        width: 12,
+      }),
+      new cloudwatch.GraphWidget({
+        title: 'Lambda Errors',
+        left: [
+          getOrdersFn.metricErrors({ period: cdk.Duration.minutes(5) }),
+          streamFn.metricErrors({ period: cdk.Duration.minutes(5) }),
+        ],
+        width: 12,
+      }),
+    );
+
+    dashboard.addWidgets(
+      new cloudwatch.GraphWidget({
+        title: 'Lambda Duration (ms)',
+        left: [
+          getOrdersFn.metricDuration({ period: cdk.Duration.minutes(5) }),
+          streamFn.metricDuration({ period: cdk.Duration.minutes(5) }),
+        ],
+        width: 12,
+      }),
+      new cloudwatch.GraphWidget({
+        title: 'API Requests & Errors',
+        left: [
+          api.metricCount({ period: cdk.Duration.minutes(5) }),
+          api.metricServerError({ period: cdk.Duration.minutes(5) }),
+          api.metricClientError({ period: cdk.Duration.minutes(5) }),
+        ],
+        width: 12,
+      }),
+    );
+
+    dashboard.addWidgets(
+      new cloudwatch.GraphWidget({
+        title: 'DynamoDB Capacity (Read/Write)',
+        left: [
+          table.metricConsumedReadCapacityUnits({ period: cdk.Duration.minutes(5) }),
+          table.metricConsumedWriteCapacityUnits({ period: cdk.Duration.minutes(5) }),
+        ],
+        width: 12,
+      }),
+      new cloudwatch.SingleValueWidget({
+        title: 'Stream Errors (last 5 min)',
+        metrics: [streamFn.metricErrors({ period: cdk.Duration.minutes(5) })],
+        width: 12,
+      }),
+    );
+
     new cdk.CfnOutput(this, 'ApiUrl', { value: api.url });
     new cdk.CfnOutput(this, 'GraphqlUrl', { value: graph.graphqlUrl });
     new cdk.CfnOutput(this, 'UserPoolId', { value: userPool.userPoolId });
     new cdk.CfnOutput(this, 'UserPoolClientId', { value: userPoolClient.userPoolClientId });
+    new cdk.CfnOutput(this, 'DashboardUrl', {
+      value: `https://${this.region}.console.aws.amazon.com/cloudwatch/home?region=${this.region}#dashboards:name=${dashboard.dashboardName}`,
+    });
   }
 }
