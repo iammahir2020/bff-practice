@@ -13,6 +13,10 @@ export interface MicroserviceEventSourceProps {
 
 export class MicroserviceEventSource extends Construct {
   public readonly eventBusName: string;
+  public readonly rule: events.Rule;
+  public readonly projectionQueue: sqs.Queue;
+  public readonly projectionDlq: sqs.Queue;
+  public readonly eventConsumerFn: lambda.Function;
 
   constructor(scope: Construct, id: string, props: MicroserviceEventSourceProps) {
     super(scope, id);
@@ -37,7 +41,7 @@ export class MicroserviceEventSource extends Construct {
       deadLetterQueue: { queue: projectionDlq, maxReceiveCount: 3 },
     });
 
-    new events.Rule(this, 'OrderUpdatedRule', {
+    const rule = new events.Rule(this, 'OrderUpdatedRule', {
       eventBus: bus,
       eventPattern: { source: ['bff.microservice'] },
       targets: [new targets.SqsQueue(projectionQueue)],
@@ -60,5 +64,9 @@ export class MicroserviceEventSource extends Construct {
     }));
 
     this.eventBusName = bus.eventBusName;
+    this.rule = rule;
+    this.projectionQueue = projectionQueue;
+    this.projectionDlq = projectionDlq;
+    this.eventConsumerFn = eventConsumerFn;
   }
 }

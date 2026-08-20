@@ -158,6 +158,14 @@ verified — the whole point is seeing each layer light up on its own.
   Monitor → CloudWatch logs** shows the errors that triggered each retry.
   **SQS → `ProjectionQueue` → Lambda triggers tab** shows the batch
   failure/report config.
+- **Dashboard:** by this point the producer pipeline has widgets on the
+  same `BFF-Live-Health` dashboard used by the subscriber side —
+  `OrderUpdatedRule Invocations`, `EventConsumerFn Invocations & Errors`,
+  `ProjectionQueue / ProjectionDLQ Depth`, and a `DLQ Backlog (current)`
+  single-value widget. One URL (`DashboardUrl` stack output) now covers
+  Steps 1–6 end to end — check it instead of hopping between five console
+  pages. Watching `DLQ Backlog` during the deliberate-break test above is a
+  good way to see it in action.
 
 ---
 
@@ -188,6 +196,12 @@ verified — the whole point is seeing each layer light up on its own.
   confirm it only has `AmazonSSMManagedInstanceCore` attached so far. You
   can also start the SSM session from here: select the instance → **Connect
   → Session Manager → Connect**, instead of the CLI.
+- **Dashboard:** add a widget to `BFF-Live-Health` for `AWS/EC2`
+  `CPUUtilization` and `StatusCheckFailed`, dimensioned on this instance's
+  ID (`instance.instanceId`) — no CloudWatch Agent needed for these two,
+  they're published by EC2 automatically. Confirms the instance is alive
+  from the same dashboard as everything else, even before it's running any
+  application code.
 
 ### Step 8: Minimal "hello world" HTTP server via UserData
 - **Goal:** get *any* Node process running and reachable through an SSM
@@ -244,6 +258,12 @@ verified — the whole point is seeing each layer light up on its own.
   **DynamoDB → `PriceProjection` → Explore table items** and the running
   **client app** — both should show `order-001` live. **CloudWatch →
   Log groups → `EventConsumerFn`** for the processing log line.
+- **Dashboard:** this is the step where a real end-to-end request first
+  exists (`curl` → EC2 → EventBridge → SQS → Lambda → DynamoDB). Every hop
+  now has a widget on `BFF-Live-Health` from prior steps — worth a moment
+  to watch the whole row of widgets move together after one `curl` call,
+  as a sanity check that the "one dashboard for the whole flow" idea
+  actually holds up under a real request, not just synthetic test events.
 
 ### Step 10: Full CRUD + partial-update correctness
 - **Goal:** add `GET /orders`, `GET /orders/:orderId`, `PUT /orders/:orderId`
@@ -300,6 +320,11 @@ verified — the whole point is seeing each layer light up on its own.
   username (password is shown but treat this as sensitive). **VPC →
   Security groups** — confirm the DB security group's inbound rule sources
   the EC2 security group, not a CIDR range.
+- **Dashboard:** add a widget to `BFF-Live-Health` for `AWS/RDS`
+  `ServerlessDatabaseCapacity` (the ACU metric), dimensioned on
+  `dbCluster.clusterIdentifier` — this is the one that visually proves the
+  scale-to-0-when-idle cost story from the plan's Cost note, right next to
+  everything else on the same screen.
 
 ### Step 12: Wire the app to Postgres — RDS becomes the source of truth
 - **Goal:** `initDb()` in `server.js` fetches the secret, connects via `pg`,

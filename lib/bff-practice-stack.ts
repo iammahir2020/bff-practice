@@ -164,8 +164,55 @@ export class BffPracticeStack extends cdk.Stack {
       }),
     );
 
-    // ── Step 1 of backend_implementation_steps.md: bare event bus ────
+    // ── Producer pipeline (backend_implementation_steps.md Steps 1-6) ──
     const microservice = new MicroserviceEventSource(this, 'MicroserviceEventSource', { table });
+
+    // Same dashboard, new rows — one screen for both the subscriber
+    // pipeline above and the producer pipeline below.
+    dashboard.addWidgets(
+      new cloudwatch.GraphWidget({
+        title: 'OrderUpdatedRule Invocations',
+        left: [
+          new cloudwatch.Metric({
+            namespace: 'AWS/Events',
+            metricName: 'Invocations',
+            dimensionsMap: { RuleName: microservice.rule.ruleName },
+            period: cdk.Duration.minutes(5),
+          }),
+          new cloudwatch.Metric({
+            namespace: 'AWS/Events',
+            metricName: 'FailedInvocations',
+            dimensionsMap: { RuleName: microservice.rule.ruleName },
+            period: cdk.Duration.minutes(5),
+          }),
+        ],
+        width: 12,
+      }),
+      new cloudwatch.GraphWidget({
+        title: 'EventConsumerFn Invocations & Errors',
+        left: [
+          microservice.eventConsumerFn.metricInvocations({ period: cdk.Duration.minutes(5) }),
+          microservice.eventConsumerFn.metricErrors({ period: cdk.Duration.minutes(5) }),
+        ],
+        width: 12,
+      }),
+    );
+
+    dashboard.addWidgets(
+      new cloudwatch.GraphWidget({
+        title: 'ProjectionQueue / ProjectionDLQ Depth',
+        left: [
+          microservice.projectionQueue.metricApproximateNumberOfMessagesVisible({ period: cdk.Duration.minutes(5) }),
+          microservice.projectionDlq.metricApproximateNumberOfMessagesVisible({ period: cdk.Duration.minutes(5) }),
+        ],
+        width: 12,
+      }),
+      new cloudwatch.SingleValueWidget({
+        title: 'DLQ Backlog (current)',
+        metrics: [microservice.projectionDlq.metricApproximateNumberOfMessagesVisible()],
+        width: 12,
+      }),
+    );
 
     new cdk.CfnOutput(this, 'ApiUrl', { value: api.url });
     new cdk.CfnOutput(this, 'GraphqlUrl', { value: graph.graphqlUrl });

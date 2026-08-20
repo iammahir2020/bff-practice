@@ -212,9 +212,13 @@ Sign up a user (self sign-up is enabled on the user pool, email as the sign-in a
 
 ## Monitoring
 
-The stack provisions a CloudWatch dashboard (`BFF-Live-Health`) with widgets for Lambda invocations/errors/duration, API Gateway requests/errors, and DynamoDB read/write capacity — find its link in the `DashboardUrl` stack output. Both `GetOrdersFn` and `StreamHandlerFn` (plus the REST API stage) have X-Ray tracing enabled (AppSync tracing is intentionally left off — enabling it forces CloudFormation to replace the GraphQL API and its dependent resources, changing the URL). No alarms or email notifications are wired up yet.
+The stack provisions a single CloudWatch dashboard (`BFF-Live-Health`) covering both pipelines — find its link in the `DashboardUrl` stack output:
+- **Subscriber side:** Lambda invocations/errors/duration (`GetOrdersFn`, `StreamHandlerFn`), API Gateway requests/errors, DynamoDB read/write capacity.
+- **Producer side:** `OrderUpdatedRule` invocations/failures, `EventConsumerFn` invocations/errors, `ProjectionQueue`/`ProjectionDLQ` depth, and a `DLQ Backlog (current)` single-value widget.
 
-**Known gap:** `EventConsumerFn` and the `ProjectionQueue`/`ProjectionDLQ` from the producer pipeline aren't on the dashboard yet, and don't have X-Ray tracing enabled — for now, check them directly: **Lambda → EventConsumerFn → Monitor** for invocations/errors, and **SQS → ProjectionQueue** / **ProjectionDLQ** for queue depth.
+More widgets get added here incrementally as later steps introduce new resources (EC2 instance metrics in Step 7, RDS ACU capacity in Step 11) — see `backend_implementation_steps.md`'s `Dashboard` notes on those steps.
+
+`GetOrdersFn` and `StreamHandlerFn` (plus the REST API stage) have X-Ray tracing enabled (AppSync tracing is intentionally left off — enabling it forces CloudFormation to replace the GraphQL API and its dependent resources, changing the URL). `EventConsumerFn` doesn't have X-Ray tracing enabled yet. No alarms or email notifications are wired up yet.
 
 ## Roadmap
 
